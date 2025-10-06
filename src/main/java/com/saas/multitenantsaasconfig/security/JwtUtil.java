@@ -5,58 +5,61 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.*;
+import java.util.stream.Collectors;
 import java.security.Key;
-import java.util.Date;
-import java.util.Map;
 
 @Component
 public class JwtUtil {
 
     @Value("${jwt.secret}")
-    private String secret;
+    private String jwtSecret;
 
-    @Value("${jwt.expiration}")
+    @Value("${jwt.expiration.ms}")
     private long jwtExpirationMs;
 
-    private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes());
+    private Key getKey() {
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
-    public String generateToken(String username, String tenantId, String role) {
+    public String generateToken(String username, String tenantId, List<String> roles) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("tenant", tenantId);
+        claims.put("roles", roles);
         return Jwts.builder()
                 .setSubject(username)
-                .addClaims(Map.of(
-                        "tenantId", tenantId,
-                        "role", role
-                ))
+                .addClaims(claims)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .signWith(getKey(), SignatureAlgorithm.HS256)
                 .compact();
-    }
-
-    public Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-    }
-
-    public String extractTenantId(String token) {
-        return extractAllClaims(token).get("tenantId", String.class);
-    }
-
-    public String extractUsername(String token) {
-        return extractAllClaims(token).getSubject();
     }
 
     public boolean validateToken(String token) {
         try {
-            extractAllClaims(token);
+            Jwts.parserBuilder().setSigningKey(getKey()).build().parseClaimsJws(token);
             return true;
-        } catch (JwtException | IllegalArgumentException e) {
+        } catch (JwtException e) {
             return false;
         }
+    }
+
+    public String getUsername(String token) {
+        return Jwts.parserBuilder().setSigningKey(getKey()).build()
+                .parseClaimsJws(token).getBody().getSubject();
+    }
+
+    public String getTenantId(String token) {
+        return (String) Jwts.parserBuilder().setSigningKey(getKey()).build()
+                .parseClaimsJws(token).getBody().get("tenant");
+    }
+
+    public List<String> getRoles(String token) {
+        Object roles = Jwts.parserBuilder().setSigningKey(getKey()).build()
+                .parseClaimsJws(token).getBody().get("roles");
+        if (roles instanceof List<?>) {
+            return ((List<?>) roles).stream().map(Object::toString).collect(Collectors.toList());
+        }
+        return List.of();
     }
 }
