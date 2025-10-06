@@ -1,7 +1,3 @@
-Here’s a **complete, professional `README.md`** for your **Multi-Tenant SaaS Configuration Backend** project — covering setup, structure, endpoints, and key features.
-
----
-
 # 🏢 Multi-Tenant SaaS Configuration Backend
 
 This project is a **Spring Boot 3.5.x** backend service designed to manage **multi-tenant configurations** for SaaS platforms.
