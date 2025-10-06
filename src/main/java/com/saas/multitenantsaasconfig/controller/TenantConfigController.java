@@ -14,30 +14,31 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TenantConfigController {
 
-    private final TenantConfigService service;
+    private final TenantConfigService tenantConfigService;
 
-    @GetMapping("/{tenantId}")
+    @GetMapping("/{tenantId}/{environment}")
     public ResponseEntity<List<TenantConfig>> getConfigs(
             @PathVariable String tenantId,
-            @RequestParam(defaultValue = "DEV") String env) {
-        return ResponseEntity.ok(service.getConfigs(tenantId, env));
+            @PathVariable String environment) {
+        return ResponseEntity.ok(tenantConfigService.getConfigs(tenantId, environment));
     }
 
-    @PostMapping("/{tenantId}")
+    @PostMapping("/{tenantId}/{environment}")
     public ResponseEntity<TenantConfig> saveConfig(
             @PathVariable String tenantId,
+            @PathVariable String environment,
             @RequestParam String key,
-            @RequestParam(defaultValue = "DEV") String env,
-            @RequestBody Map<String, Object> value) {
-        return ResponseEntity.ok(service.saveConfig(tenantId, env, key, value));
+            @RequestBody Map<String, Object> payload) {  // ✅ Correct type
+        TenantConfig config = tenantConfigService.saveConfig(tenantId, environment, key, payload);
+        return ResponseEntity.ok(config);
     }
 
-    @DeleteMapping("/{tenantId}")
+    @DeleteMapping("/{tenantId}/{environment}")
     public ResponseEntity<Void> deleteConfig(
             @PathVariable String tenantId,
-            @RequestParam String key,
-            @RequestParam(defaultValue = "DEV") String env) {
-        service.deleteConfig(tenantId, env, key);
+            @PathVariable String environment,
+            @RequestParam String key) {
+        tenantConfigService.deleteConfig(tenantId, environment, key);
         return ResponseEntity.noContent().build();
     }
 }

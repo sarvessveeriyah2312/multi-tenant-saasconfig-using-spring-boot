@@ -1,5 +1,7 @@
 package com.saas.multitenantsaasconfig.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saas.multitenantsaasconfig.model.TenantConfig;
 import com.saas.multitenantsaasconfig.repository.TenantConfigRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,50 +12,65 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
 public class TenantConfigService {
 
-    private final TenantConfigRepository repo;
+    private final TenantConfigRepository tenantConfigRepository;
+    private final AuditLogService auditLogService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // Cache only list results under a distinct cache name
     @Cacheable(value = "tenantConfigList", key = "#tenantId + '_' + #environment")
     public List<TenantConfig> getConfigs(String tenantId, String environment) {
-        System.out.println("🧭 Fetching configs from DB for tenant: " + tenantId + " | env: " + environment);
-        return repo.findByTenantIdAndEnvironment(tenantId, environment);
+        auditLogService.record("READ", "TenantConfig", "Fetched configs for " + tenantId);
+        return tenantConfigRepository.findByTenantId(tenantId);
     }
 
-    // Use different cache for single config objects
     @CachePut(value = "tenantConfigSingle", key = "#tenantId + '_' + #environment + '_' + #key")
-    public TenantConfig saveConfig(String tenantId, String environment, String key, Map<String, Object> value) {
-        TenantConfig config = repo.findByTenantIdAndConfigKeyAndEnvironment(tenantId, key, environment)
-                .orElse(TenantConfig.builder()
-                        .tenantId(tenantId)
-                        .environment(environment)
-                        .configKey(key)
-                        .build());
-        config.setConfigValue(value);
-        TenantConfig saved = repo.save(config);
+    public TenantConfig saveConfig(String tenantId, String environment, String key, Object payload) {
+        try {
+            Map<String, Object> configMap;
 
-        // Evict list cache to ensure future GET gets fresh data
-        evictTenantListCache(tenantId, environment);
+            // Convert payload to Map<String, Object>
+            if (payload instanceof Map<?, ?> mapPayload) {
+                // Safe conversion from Map<?, ?> to Map<String, Object>
+                configMap = new HashMap<>();
+                for (Map.Entry<?, ?> entry : mapPayload.entrySet()) {
+                    configMap.put(entry.getKey().toString(), entry.getValue());
+                }
+            } else if (payload instanceof String strPayload) {
+                try {
+                    // Try to parse string as JSON
+                    configMap = objectMapper.readValue(strPayload, new TypeReference<Map<String, Object>>() {});
+                } catch (Exception e) {
+                    // If not valid JSON, treat as simple value
+                    configMap = Map.of("value", strPayload);
+                }
+            } else {
+                // For other object types, wrap in a map
+                configMap = Map.of("value", payload);
+            }
 
-        return saved;
+            TenantConfig config = TenantConfig.builder()
+                    .tenantId(tenantId)
+                    .configKey(key)
+                    .configValue(configMap) // Directly use Map, not JSON string
+                    .build();
+
+            TenantConfig saved = tenantConfigRepository.save(config);
+            auditLogService.record("CREATE", "TenantConfig", "Created key: " + key + " for " + tenantId);
+            return saved;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to process config payload", e);
+        }
     }
 
-    // Use separate cache namespace for deletions
     @CacheEvict(value = "tenantConfigSingle", key = "#tenantId + '_' + #environment + '_' + #key")
     public void deleteConfig(String tenantId, String environment, String key) {
-        repo.findByTenantIdAndConfigKeyAndEnvironment(tenantId, key, environment)
-                .ifPresent(repo::delete);
-
-        // Also clear the list cache so that next GET reloads from DB
-        evictTenantListCache(tenantId, environment);
-    }
-
-    @CacheEvict(value = "tenantConfigList", key = "#tenantId + '_' + #environment")
-    public void evictTenantListCache(String tenantId, String environment) {
-        System.out.println("Cache cleared for tenant: " + tenantId + " | env: " + environment);
+        tenantConfigRepository.deleteByTenantIdAndConfigKey(tenantId, key);
+        auditLogService.record("DELETE", "TenantConfig", "Deleted key: " + key + " for " + tenantId);
     }
 }

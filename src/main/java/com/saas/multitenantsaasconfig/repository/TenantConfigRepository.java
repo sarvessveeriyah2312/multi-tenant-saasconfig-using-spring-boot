@@ -2,14 +2,17 @@ package com.saas.multitenantsaasconfig.repository;
 
 import com.saas.multitenantsaasconfig.model.TenantConfig;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface TenantConfigRepository extends JpaRepository<TenantConfig, Long> {
 
     List<TenantConfig> findByTenantId(String tenantId);
 
-    List<TenantConfig> findByTenantIdAndEnvironment(String tenantId, String environment);
+    Optional<TenantConfig> findByTenantIdAndConfigKey(String tenantId, String configKey);
 
-    Optional<TenantConfig> findByTenantIdAndConfigKeyAndEnvironment(String tenantId, String configKey, String environment);
+    void deleteByTenantIdAndConfigKey(String tenantId, String configKey);
 }
