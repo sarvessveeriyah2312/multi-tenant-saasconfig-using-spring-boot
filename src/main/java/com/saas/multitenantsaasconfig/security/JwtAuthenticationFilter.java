@@ -1,5 +1,6 @@
 package com.saas.multitenantsaasconfig.security;
 
+import com.saas.multitenantsaasconfig.config.TenantContext;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,22 +24,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
 
-        String header = request.getHeader("Authorization");
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
-            if (jwtUtil.validateToken(token)) {
-                String username = jwtUtil.getUsername(token);
-                String tenantId = jwtUtil.getTenantId(token);
-                var authorities = jwtUtil.getRoles(token).stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList());
+        try {
+            String header = request.getHeader("Authorization");
+            if (header != null && header.startsWith("Bearer ")) {
+                String token = header.substring(7);
+                if (jwtUtil.validateToken(token)) {
+                    String username = jwtUtil.getUsername(token);
+                    String tenantId = jwtUtil.getTenantId(token);
+                    var authorities = jwtUtil.getRoles(token).stream()
+                            .map(SimpleGrantedAuthority::new)
+                            .collect(Collectors.toList());
 
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(username, null, authorities);
-                auth.setDetails(tenantId);
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                    UsernamePasswordAuthenticationToken auth =
+                            new UsernamePasswordAuthenticationToken(username, null, authorities);
+                    auth.setDetails(tenantId);
+
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                    TenantContext.setTenantId(tenantId);
+                }
             }
+            chain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
         }
-        chain.doFilter(request, response);
     }
+
+
+
 }
