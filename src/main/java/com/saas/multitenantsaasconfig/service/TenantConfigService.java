@@ -17,26 +17,43 @@ public class TenantConfigService {
 
     private final TenantConfigRepository repo;
 
-    @Cacheable(value = "tenantConfigs", key = "#tenantId")
-    public List<TenantConfig> getConfigs(String tenantId) {
-        System.out.println("Fetching from DB for tenant: " + tenantId);
-        return repo.findByTenantId(tenantId);
+    // Cache only list results under a distinct cache name
+    @Cacheable(value = "tenantConfigList", key = "#tenantId + '_' + #environment")
+    public List<TenantConfig> getConfigs(String tenantId, String environment) {
+        System.out.println("🧭 Fetching configs from DB for tenant: " + tenantId + " | env: " + environment);
+        return repo.findByTenantIdAndEnvironment(tenantId, environment);
     }
 
-    @CachePut(value = "tenantConfigs", key = "#tenantId")
-    public TenantConfig saveConfig(String tenantId, String key, Map<String, Object> value) {
-        TenantConfig config = repo.findByTenantIdAndConfigKey(tenantId, key)
+    // Use different cache for single config objects
+    @CachePut(value = "tenantConfigSingle", key = "#tenantId + '_' + #environment + '_' + #key")
+    public TenantConfig saveConfig(String tenantId, String environment, String key, Map<String, Object> value) {
+        TenantConfig config = repo.findByTenantIdAndConfigKeyAndEnvironment(tenantId, key, environment)
                 .orElse(TenantConfig.builder()
                         .tenantId(tenantId)
+                        .environment(environment)
                         .configKey(key)
                         .build());
         config.setConfigValue(value);
-        return repo.save(config);
+        TenantConfig saved = repo.save(config);
+
+        // Evict list cache to ensure future GET gets fresh data
+        evictTenantListCache(tenantId, environment);
+
+        return saved;
     }
 
-    @CacheEvict(value = "tenantConfigs", key = "#tenantId")
-    public void deleteConfig(String tenantId, String key) {
-        repo.findByTenantIdAndConfigKey(tenantId, key)
+    // Use separate cache namespace for deletions
+    @CacheEvict(value = "tenantConfigSingle", key = "#tenantId + '_' + #environment + '_' + #key")
+    public void deleteConfig(String tenantId, String environment, String key) {
+        repo.findByTenantIdAndConfigKeyAndEnvironment(tenantId, key, environment)
                 .ifPresent(repo::delete);
+
+        // Also clear the list cache so that next GET reloads from DB
+        evictTenantListCache(tenantId, environment);
+    }
+
+    @CacheEvict(value = "tenantConfigList", key = "#tenantId + '_' + #environment")
+    public void evictTenantListCache(String tenantId, String environment) {
+        System.out.println("Cache cleared for tenant: " + tenantId + " | env: " + environment);
     }
 }

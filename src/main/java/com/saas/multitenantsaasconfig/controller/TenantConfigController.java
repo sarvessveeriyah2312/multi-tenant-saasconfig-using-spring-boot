@@ -17,21 +17,27 @@ public class TenantConfigController {
     private final TenantConfigService service;
 
     @GetMapping("/{tenantId}")
-    public ResponseEntity<List<TenantConfig>> getConfigs(@PathVariable String tenantId) {
-        return ResponseEntity.ok(service.getConfigs(tenantId));
+    public ResponseEntity<List<TenantConfig>> getConfigs(
+            @PathVariable String tenantId,
+            @RequestParam(defaultValue = "DEV") String env) {
+        return ResponseEntity.ok(service.getConfigs(tenantId, env));
     }
 
     @PostMapping("/{tenantId}")
-    public ResponseEntity<TenantConfig> saveConfig(@PathVariable String tenantId,
-                                                   @RequestParam String key,
-                                                   @RequestBody Map<String, Object> value) {
-        return ResponseEntity.ok(service.saveConfig(tenantId, key, value));
+    public ResponseEntity<TenantConfig> saveConfig(
+            @PathVariable String tenantId,
+            @RequestParam String key,
+            @RequestParam(defaultValue = "DEV") String env,
+            @RequestBody Map<String, Object> value) {
+        return ResponseEntity.ok(service.saveConfig(tenantId, env, key, value));
     }
 
     @DeleteMapping("/{tenantId}")
-    public ResponseEntity<Void> deleteConfig(@PathVariable String tenantId,
-                                             @RequestParam String key) {
-        service.deleteConfig(tenantId, key);
+    public ResponseEntity<Void> deleteConfig(
+            @PathVariable String tenantId,
+            @RequestParam String key,
+            @RequestParam(defaultValue = "DEV") String env) {
+        service.deleteConfig(tenantId, env, key);
         return ResponseEntity.noContent().build();
     }
 }

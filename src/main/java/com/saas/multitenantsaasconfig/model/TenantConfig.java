@@ -27,6 +27,9 @@ public class TenantConfig {
     @Column(nullable = false)
     private String configKey;
 
+    @Column(nullable = false)
+    private String environment; // DEV / UAT / PROD
+
     // Use JSONB type to store structured configuration
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
